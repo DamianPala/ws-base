@@ -1,0 +1,119 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ws-base"
+dynamic = ["version"]
+description = 'Websocket Cliet Server Base'
+readme = "README.md"
+requires-python = ">=3.11.0,<3.14.0"
+license = "MIT"
+keywords = []
+authors = [{ name = "Haz", email = "mail@damianpala.com" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+    "requests==2.31.0",
+    "python-socketio==5.9.0",
+    "gevent==23.9.1",
+    "gevent-websocket==0.10.1",
+    "websocket-client==1.7.0",
+    "cryptography==41.0.4",
+    "pydantic",
+    "logger @ git+https://github.com/DamianPala/logger.git@main"
+]
+
+[project.urls]
+Documentation = "https://github.com/DamianPala/ws-base#readme"
+Issues = "https://github.com/DamianPala/ws-base/issues"
+Source = "https://github.com/DamianPala/ws-base"
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.version]
+path = "src/ws_base/__about__.py"
+
+[tool.hatch.envs.default]
+dependencies = [
+    "coverage[toml]>=6.5",
+    "pytest",
+    "pytest-mock"
+]
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+test-cov = "coverage run -m pytest {args:tests}"
+cov-report = [
+    "- coverage combine",
+    "coverage report",
+]
+cov = [
+    "test-cov",
+    "cov-report",
+]
+
+[[tool.hatch.envs.all.matrix]]
+python = ["3.8", "3.9", "3.10", "3.11", "3.12"]
+
+[tool.hatch.envs.hatch-test]
+extra-dependencies = [
+    "pytest-asyncio"
+]
+
+[[tool.hatch.envs.hatch-test.matrix]]
+python = ["3.12"]
+
+[tool.coverage.run]
+source_pkgs = ["ws_base", "tests"]
+branch = true
+parallel = true
+omit = [
+    "src/ws_base/__about__.py",
+]
+
+[tool.coverage.paths]
+ws_base = ["src/ws_base", "*/ws-base/src/ws_base"]
+tests = ["tests", "*/ws-base/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "no cov",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+]
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+norecursedirs = [
+    ".",
+    ".svn",
+    "_build",
+    "tmp*",
+    "lib/third",
+    "lib",
+    "*.egg",
+    "bin",
+    "distutils",
+    "build",
+    "docs",
+    "demo"
+]
+addopts = "-p no:xdist --tb=long --capture=fd -rxX  --maxfail=10"
+python_files = ["*.py"]
+log_cli = true
+log_cli_level = "INFO"
+log_format = "[%(asctime)s.%(msecs)03d] - %(name)s:%(lineno)d [%(levelname)s]: %(message)s"
+log_date_format = "%Y-%m-%d %H:%M:%S"
+testpaths = [
+    "tests"
+]
