@@ -12,9 +12,9 @@ import ws_base as wsbase  # TODO: rename
 
 
 SERVER_DEFAULT_HOST = 'localhost'
-SERVER_DEFAULT_PORT = 7000
-SERVER_DEFAULT_ADDRESS = f'wss://{SERVER_DEFAULT_HOST}:{SERVER_DEFAULT_PORT}'
-PACKAGE_PATH = Path(__file__).parent  # TODO: check name
+SERVER_DEFAULT_PORT = 9000
+SERVER_DEFAULT_URL = f'wss://{SERVER_DEFAULT_HOST}:{SERVER_DEFAULT_PORT}'
+PACKAGE_PATH = Path(__file__).parent
 AUTH_KEY = hashlib.sha3_256(f'<<## {PACKAGE_PATH.name} auth key ##>>'.encode()).hexdigest()
 
 
@@ -22,25 +22,18 @@ class MyError(Exception):
     pass
 
 
-class Event(StrEnum):
+class Event(wsbase.Event, StrEnum):
     GET_VALUE = auto()
     SET_VALUE = auto()
     METHOD = auto()
     GET_DATACLASS = auto()
-
-    @property
-    def req_event(self) -> str:
-        return self.value + '_req'
-
-    @property
-    def rsp_event(self) -> str:
-        return self.value + '_rsp'
 
 
 class Status(wsbase.Status, StrEnum):
     pass
 
 
+# TODO: move
 class SerializableDataClass:
     @classmethod
     def from_dict(cls, d) -> 'SerializableDataClass':
@@ -81,7 +74,13 @@ class Rsp(SerializableDataClass, wsbase.Rsp):
 
 @dataclass
 class MyDataClass(SerializableDataClass):
-    value1: int
+    value1: Decimal
     value2: str
     kvalue1: int = 1
     kvalue2: str = 'kvalue'
+
+    @classmethod
+    def from_dict(cls, d) -> 'MyDataClass':
+        obj = super().from_dict(d)
+        obj.value1 = Decimal(obj.value1)
+        return obj
