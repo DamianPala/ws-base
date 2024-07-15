@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import json
 import hashlib
 from pathlib import Path
-from dataclasses import dataclass, asdict
-from enum import Enum, StrEnum, auto
-from typing import Optional, Union, List, Dict
+from dataclasses import dataclass
+from enum import StrEnum, auto
+from typing import List
 from decimal import Decimal
 
 import ws_base as wsbase  # TODO: rename
@@ -22,65 +21,35 @@ class MyError(Exception):
     pass
 
 
-class Event(wsbase.Event, StrEnum):
+class Event(StrEnum):
     GET_VALUE = auto()
     SET_VALUE = auto()
     METHOD = auto()
     GET_DATACLASS = auto()
+    SET_DATACLASS = auto()
+    GET_BASEMODEL = auto()
+    SET_BASEMODEL = auto()
 
 
-class Status(wsbase.Status, StrEnum):
-    pass
+class SubClassBase(wsbase.SerializableBaseModel):
+    value: Decimal
 
 
-# TODO: move
-class SerializableDataClass:
-    @classmethod
-    def from_dict(cls, d) -> 'SerializableDataClass':
-        obj = cls(**d)  # noqa
-        if 'event' in d and hasattr(obj, 'event'):
-            obj.event = Event(obj.event)
-        return obj
-
-    def to_dict(self) -> Dict:
-        d = asdict(self)  # noqa
-        for key, value in d.items():
-            if isinstance(value, Enum):
-                d[key] = value.value
-            if isinstance(value, Decimal):
-                d[key] = str(value)
-        return d
-
-    @classmethod
-    def from_json(cls, json_str: str) -> 'SerializableDataClass':
-        return cls.from_dict(json.loads(json_str))
-
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict(), indent=4)
+class MainClassBase(wsbase.SerializableBaseModel):
+    id: int
+    name: str
+    values: List[Decimal]
+    nested: SubClassBase
 
 
 @dataclass
-class Req(SerializableDataClass, wsbase.Req):
-    event: Event
-    data: Optional[Union[int, float, str, List, Dict]] = None
+class SubClassData(wsbase.SerializableDataClass):
+    value: Decimal
 
 
 @dataclass
-class Rsp(SerializableDataClass, wsbase.Rsp):
-    status: Status
-    event: Optional[Event] = None
-    data: Optional[Union[int, float, str, List, Dict]] = None
-
-
-@dataclass
-class MyDataClass(SerializableDataClass):
-    value1: Decimal
-    value2: str
-    kvalue1: int = 1
-    kvalue2: str = 'kvalue'
-
-    @classmethod
-    def from_dict(cls, d) -> 'MyDataClass':
-        obj = super().from_dict(d)
-        obj.value1 = Decimal(obj.value1)
-        return obj
+class MainClassData(wsbase.SerializableDataClass):
+    id: int
+    name: str
+    values: List[Decimal]
+    nested: SubClassData

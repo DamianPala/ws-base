@@ -8,17 +8,15 @@ import threading
 import traceback
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, asdict
-from typing import Optional, Type, Union, Tuple, List, Dict, Callable, Any, Awaitable
-from enum import Enum
+from typing import Optional, Type, Union, Tuple, List, Dict, Callable, Any
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
+from pydantic import RootModel, BaseModel
 from cryptography import x509
-from cryptography.hazmat.primitives.asymmetric.types import PrivateKeyTypes, PublicKeyTypes
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
-from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.x509.oid import NameOID
 
 import socketio
@@ -27,7 +25,7 @@ from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
 
 
-_log = logger.get_logger(__name__)
+log = logger.get_logger(__name__)
 
 
 class WsBaseError(Exception):
@@ -44,6 +42,24 @@ class ResponseTimeoutError(WsBaseError):
     pass
 
 
+class SerializableBaseModel(BaseModel):
+    @classmethod
+    def from_json(cls, json_str: str) -> 'SerializableBaseModel':
+        return cls.model_validate_json(json_str)
+
+    def to_json(self, indent: Optional[int] = None) -> str:
+        return self.model_dump_json(indent=indent)
+
+
+class SerializableDataClass:
+    @classmethod
+    def from_json(cls, json_str: str) -> 'SerializableDataClass':
+        return RootModel[cls].model_validate_json(json_str).root
+
+    def to_json(self, indent: Optional[int] = None) -> str:
+        return RootModel[self.__class__](self).model_dump_json(indent=indent)
+
+
 @dataclass
 class SerializableException:
     name: str
@@ -58,45 +74,49 @@ class SerializableException:
         return asdict(self)
 
 
-class Event(Enum):
-    @property
-    def req_event(self) -> str:
-        return self.value + '_req'
-
-    @property
-    def rsp_event(self) -> str:
-        return self.value + '_rsp'
-
-
 class Status:
     SUCCESS = 'success'
     ERROR = 'error'
 
 
+def get_req_event(event: str) -> str:
+    return event + '_req'
+
+
+def get_rsp_event(event: str) -> str:
+    return event + '_rsp'
+
+
+@dataclass
 class Req(ABC):
     event: Any
-    data: Any
+    data: Optional[Union[int, float, str, List, Dict, SerializableDataClass, SerializableBaseModel]] = None
 
     @classmethod
-    @abstractmethod
     def from_dict(cls, d) -> 'Req':
-        pass
+        obj = cls(**d)
+        return obj
 
     def to_dict(self) -> Dict:
-        pass
+        if isinstance(self.data, SerializableDataClass) or isinstance(self.data, SerializableBaseModel):
+            return {'event': str(self.event), 'data': self.data.to_json()}
+        return asdict(self)
 
 
 @dataclass
 class Rsp(ABC):
     status: str
     event: Optional[Any] = None
-    data: Optional[Any] = None
+    data: Optional[Union[int, float, str, List, Dict, SerializableDataClass, SerializableBaseModel]] = None
 
     @classmethod
     def from_dict(cls, d) -> 'Rsp':
-        return cls(**d)
+        obj = cls(**d)
+        return obj
 
     def to_dict(self) -> Dict:
+        if isinstance(self.data, SerializableDataClass) or isinstance(self.data, SerializableBaseModel):
+            return {'status': self.status, 'event': str(self.event), 'data': self.data.to_json()}
         return asdict(self)
 
 
@@ -151,16 +171,16 @@ class ClientBase(ABC):
     def connection_callbacks(self) -> None:
         @self.sio.event
         def connect():  # noqa
-            _log.info(f'Connection established with: {self.server_url} as: {self.sio.get_sid()} '
-                      f'using transport: {self.sio.transport()}')
+            log.info(f'Connection established with: {self.server_url} as: {self.sio.get_sid()} '
+                     f'using transport: {self.sio.transport()}')
 
         @self.sio.event
         def disconnect():
-            _log.info(f'{self.sio.get_sid()} disconnected from server')
+            log.info(f'{self.sio.get_sid()} disconnected from server')
 
         @self.sio.event
         def connect_error(data):
-            _log.error(f'Failed to connect to server: {data}')
+            log.error(f'Failed to connect to server: {data}')
 
     @abstractmethod
     def callbacks(self) -> None:
@@ -168,16 +188,16 @@ class ClientBase(ABC):
 
     @handle_socketio_error
     def make_request(self, req: Req) -> None:
-        self.sio.emit(req.event.req_event, req.to_dict())
+        self.sio.emit(get_req_event(req.event), req.to_dict())
 
-    def handle_response(self, rsp_cls: Type[Rsp]) -> Callable:
+    def handle_response(self) -> Callable:
         def decorator(func: Callable):
             event_name = func.__name__ + '_rsp'
 
             @functools.wraps(func)
             def wrapper(data: Dict):
                 rsp_data = {key: (value[:-4] if key == 'event' else value) for key, value in data.items()}
-                self.rsp = rsp_cls.from_dict(rsp_data)
+                self.rsp = Rsp.from_dict(rsp_data)
                 self.rsp_event.set()
 
             self.sio.on(event_name)(wrapper)
@@ -245,12 +265,12 @@ class ServerBase(ABC):
 
         if generate_cert:
             if not self.certfile_path.exists() or not self.keyfile_path.exists():
-                _log.info(f'Generating a new SSL certificate for hostname: {self.hostname}')
+                log.info(f'Generating a new SSL certificate for hostname: {self.hostname}')
                 generate_new_cert(self.certfile_path, self.keyfile_path, self.hostname)
             else:
                 dns_names = get_dns_names_from_cert(self.certfile_path.read_bytes())
                 if self.hostname not in dns_names:
-                    _log.info(f'Incompatible SSL certificate. Generating a new for hostname: {self.hostname}')
+                    log.info(f'Incompatible SSL certificate. Generating a new for hostname: {self.hostname}')
                     generate_new_cert(self.certfile_path, self.keyfile_path, self.hostname)
 
         self.sio: Optional[socketio.Server] = None
@@ -295,7 +315,7 @@ class ServerBase(ABC):
                                                 **(dict(certfile=self.certfile_path,
                                                         keyfile=self.keyfile_path) if self.certfile_path else {}))
                 self.server.serve_forever()
-                _log.info('Server thread closed')
+                log.info('Server thread closed')
             except Exception as e:
                 nonlocal exc
                 exc = e
@@ -318,20 +338,20 @@ class ServerBase(ABC):
         self.join()
         self.server = None
 
-    def handle_request(self, req_cls: Type[Req]) -> Callable:
+    def handle_request(self) -> Callable:
         def decorator(func: Callable):
             event_name = func.__name__ + '_req'
 
             @functools.wraps(func)
             def wrapper(sid, data):
-                req = req_cls.from_dict(data)
+                req = Req.from_dict(data)
                 try:
                     rsp = func(sid, req.event, req.data)
                 except Exception as e:
                     rsp = Rsp(status=Status.ERROR, data=SerializableException(name=e.__class__.__name__,
                                                                               message=str(e),
                                                                               tb=traceback.format_exc()).to_dict())
-                rsp.event = req.event.rsp_event
+                rsp.event = get_rsp_event(req.event)
                 self.sio.emit(rsp.event, data=rsp.to_dict(), to=sid)
 
             self.sio.on(event_name)(wrapper)
@@ -342,13 +362,13 @@ class ServerBase(ABC):
     def connection_callbacks(self) -> None:
         @self.sio.event
         def connect(sid, _, auth) -> None:  # noqa
-            _log.info(f'Connect client: {sid}')
+            log.info(f'Connect client: {sid}')
             if auth != self.auth_key:
                 raise socketio.exceptions.ConnectionRefusedError('Authentication failed')
 
         @self.sio.event
         def disconnect(sid) -> None:
-            _log.info(f'Disconnect client: {sid}')
+            log.info(f'Disconnect client: {sid}')
 
     @abstractmethod
     def callbacks(self) -> None:

@@ -2,12 +2,10 @@
 # -*- coding: utf-8 -*-
 import logger
 from typing import Any
-from decimal import Decimal
-from datetime import datetime
 
 from . import common
-from .common import (SERVER_DEFAULT_URL, AUTH_KEY, Req, Rsp, Event, MyDataClass)
-from ws_base import ClientBase, connect, build_exception_map
+from .common import (SERVER_DEFAULT_URL, AUTH_KEY, Event, MainClassData, MainClassBase)
+from ws_base import ClientBase, Req, connect, build_exception_map
 
 log = logger.get_logger(__name__)
 
@@ -39,24 +37,54 @@ class Client(ClientBase):
         return rsp.data
 
     @connect
-    def get_dataclass(self) -> MyDataClass:
+    def get_dataclass(self) -> MainClassData:
         self.make_request(Req(Event.GET_DATACLASS))
         rsp = self._get_and_verify_response()
-        return MyDataClass.from_dict(rsp.data)
+        return MainClassData.from_json(rsp.data)
+
+    @connect
+    def set_dataclass(self, value: MainClassData) -> MainClassData:
+        self.make_request(Req(Event.SET_DATACLASS, data=value))
+        rsp = self._get_and_verify_response()
+        return MainClassData.from_json(rsp.data)
+
+    @connect
+    def get_basemodel(self) -> MainClassBase:
+        self.make_request(Req(Event.GET_BASEMODEL))
+        rsp = self._get_and_verify_response()
+        return MainClassBase.from_json(rsp.data)
+
+    @connect
+    def set_basemodel(self, value: MainClassBase) -> MainClassBase:
+        self.make_request(Req(Event.SET_BASEMODEL, data=value))
+        rsp = self._get_and_verify_response()
+        return MainClassBase.from_json(rsp.data)
 
     def callbacks(self) -> None:
-        @self.handle_response(Rsp)
+        @self.handle_response()
         def get_value() -> None:
             log.debug(f'Received {self.rsp.event} from {self.server_url}')
 
-        @self.handle_response(Rsp)
+        @self.handle_response()
         def set_value() -> None:
             log.debug(f'Received {self.rsp.event} from {self.server_url}')
 
-        @self.handle_response(Rsp)
+        @self.handle_response()
         def method() -> None:
             log.debug(f'Received {self.rsp.event} from {self.server_url}')
 
-        @self.handle_response(Rsp)
+        @self.handle_response()
         def get_dataclass() -> None:
+            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+
+        @self.handle_response()
+        def set_dataclass() -> None:
+            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+
+        @self.handle_response()
+        def get_basemodel() -> None:
+            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+
+        @self.handle_response()
+        def set_basemodel() -> None:
             log.debug(f'Received {self.rsp.event} from {self.server_url}')

@@ -5,9 +5,8 @@ import pytest
 from contextlib import contextmanager
 from typing import Tuple
 
-from tests.clientserver import Client, Server, MyError
+from tests.clientserver import Client, Server, MyError, MainClassData, MainClassBase
 from ws_base import ResponseError
-# from src.ws_base.ws_base import ResponseError
 
 log = logger.get_logger(__name__)
 
@@ -82,6 +81,30 @@ class TestComm:
         log.info('Value:', value)
         assert value == server.dataclass
 
+    def test_set_dataclass(self, clientserver):
+        client, server = clientserver
+        new_dataclass = MainClassData.from_json(server.dataclass.to_json())
+        new_dataclass.id += 1
+        assert new_dataclass != server.dataclass
+        value = client.set_dataclass(new_dataclass)
+        log.info('Value:', value)
+        assert value == server.dataclass == new_dataclass
+
+    def test_get_basemodel(self, clientserver):
+        client, server = clientserver
+        value = client.get_basemodel()
+        log.info('Value:', value)
+        assert value == server.basemodel
+
+    def test_set_basemodel(self, clientserver):
+        client, server = clientserver
+        new_basemodel = MainClassBase.from_json(server.basemodel.to_json())
+        new_basemodel.id += 1
+        assert new_basemodel != server.basemodel
+        value = client.set_basemodel(new_basemodel)
+        log.info('Value:', value)
+        assert value == server.basemodel == new_basemodel
+
 
 class TestHandleErrors:
     def test_success(self, clientserver):
@@ -108,5 +131,12 @@ class TestHandleErrors:
         log.info(str(exc_info.value.event))
 
 
-def test_dummy(clientserver):
-    client, server = clientserver
+
+
+
+def test_dummy():
+    ...
+    # client, server = clientserver
+
+
+
