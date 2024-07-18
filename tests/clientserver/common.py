@@ -29,6 +29,7 @@ class Event(StrEnum):
     SET_DATACLASS = auto()
     GET_BASEMODEL = auto()
     SET_BASEMODEL = auto()
+    INCREMENT = auto()
 
 
 class SubClassBase(wsbase.SerializableBaseModel):

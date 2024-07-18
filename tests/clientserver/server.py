@@ -73,5 +73,9 @@ class Server(ServerBase):
             self.basemodel = MainClassBase.from_json(data)
             return Rsp(status=Status.SUCCESS, data=self.basemodel)
 
+        @self.handle_request()
+        def increment(_1, _2, data) -> Rsp:
+            return Rsp(status=Status.SUCCESS, data=data + 1)
+
     def _get_value(self) -> int:
         return self.value

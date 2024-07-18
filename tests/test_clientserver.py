@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import logger
 import pytest
+import threading
 from contextlib import contextmanager
 from typing import Tuple
 
@@ -104,6 +105,60 @@ class TestComm:
         value = client.set_basemodel(new_basemodel)
         log.info('Value:', value)
         assert value == server.basemodel == new_basemodel
+
+
+class TestConnHandling:
+    def test_client_retries_when_conn_error(self, clientserver, mocker):
+        class SioMock:
+            def __init__(self, original_emit):
+                self.original_emit = original_emit
+                self.cnt = 0
+
+            def emit(self, event, data=None, namespace=None, callback=None):
+                self.cnt += 1
+                if self.cnt == 1:
+                    raise ConnectionError('Simulated error')
+                self.original_emit(event, data=data, namespace=namespace, callback=callback)
+
+        client, server = clientserver
+        siomock = SioMock(client.sio.emit)
+        mocker.patch.object(client.sio, 'emit', new=siomock.emit)
+        value = client.get_value()
+        log.info('Value:', value)
+        assert value == server.value
+
+    def test_client_retries_till_max(self, clientserver, mocker):
+        sim_exc = ConnectionError('Simulated error')
+
+        def emit(_, _1=None, _2=None, _3=None):
+            raise sim_exc
+
+        client, server = clientserver
+        mocker.patch.object(client.sio, 'emit', new=emit)
+        with pytest.raises(type(sim_exc), match=str(sim_exc)):
+            client.get_value()
+
+    def test_multithreading(self, clientserver):
+        client, server = clientserver
+
+        def thread_worker(req_idx: int) -> None:
+            init_req_idx = req_idx
+            for _ in range(100):
+                rsp = client.increment(req_idx)
+                assert rsp == req_idx + 1
+                log.info(rsp)
+                req_idx += 1
+            log.info(f'Worker {client.sid} finished')
+            assert req_idx == init_req_idx + 100
+
+        threads = []
+        for x in range(3):
+            t = threading.Thread(target=thread_worker, args=(10 * x,))
+            t.start()
+            threads.append(t)
+
+        for t in threads:
+            t.join()
 
 
 class TestHandleErrors:

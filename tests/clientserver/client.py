@@ -20,45 +20,51 @@ class Client(ClientBase):
 
     @connect
     def get_value(self) -> Any:
-        self.make_request(Req(Event.GET_VALUE))
-        rsp = self._get_and_verify_response()
+        rsp = self.make_request(Req(Event.GET_VALUE))
+        self.verify_response(rsp)
         return rsp.data
 
     @connect
     def set_value(self, value: Any) -> Any:
-        self.make_request(Req(Event.SET_VALUE, data=value))
-        rsp = self._get_and_verify_response()
+        rsp = self.make_request(Req(Event.SET_VALUE, data=value))
+        self.verify_response(rsp)
         return rsp.data
 
     @connect
     def method(self, param: Any) -> Any:
-        self.make_request(Req(Event.METHOD, data=param))
-        rsp = self._get_and_verify_response()
+        rsp = self.make_request(Req(Event.METHOD, data=param))
+        self.verify_response(rsp)
         return rsp.data
 
     @connect
     def get_dataclass(self) -> MainClassData:
-        self.make_request(Req(Event.GET_DATACLASS))
-        rsp = self._get_and_verify_response()
+        rsp = self.make_request(Req(Event.GET_DATACLASS))
+        self.verify_response(rsp)
         return MainClassData.from_json(rsp.data)
 
     @connect
     def set_dataclass(self, value: MainClassData) -> MainClassData:
-        self.make_request(Req(Event.SET_DATACLASS, data=value))
-        rsp = self._get_and_verify_response()
+        rsp = self.make_request(Req(Event.SET_DATACLASS, data=value))
+        self.verify_response(rsp)
         return MainClassData.from_json(rsp.data)
 
     @connect
     def get_basemodel(self) -> MainClassBase:
-        self.make_request(Req(Event.GET_BASEMODEL))
-        rsp = self._get_and_verify_response()
+        rsp = self.make_request(Req(Event.GET_BASEMODEL))
+        self.verify_response(rsp)
         return MainClassBase.from_json(rsp.data)
 
     @connect
     def set_basemodel(self, value: MainClassBase) -> MainClassBase:
-        self.make_request(Req(Event.SET_BASEMODEL, data=value))
-        rsp = self._get_and_verify_response()
+        rsp = self.make_request(Req(Event.SET_BASEMODEL, data=value))
+        self.verify_response(rsp)
         return MainClassBase.from_json(rsp.data)
+
+    @connect
+    def increment(self, value: int) -> int:
+        rsp = self.make_request(Req(Event.INCREMENT, data=value))
+        self.verify_response(rsp)
+        return rsp.data
 
     def callbacks(self) -> None:
         @self.handle_response()
@@ -87,4 +93,8 @@ class Client(ClientBase):
 
         @self.handle_response()
         def set_basemodel() -> None:
+            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+
+        @self.handle_response()
+        def increment() -> None:
             log.debug(f'Received {self.rsp.event} from {self.server_url}')
