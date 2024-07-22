@@ -4,7 +4,9 @@ import logger
 from decimal import Decimal
 
 from .common import PACKAGE_PATH, SERVER_DEFAULT_URL, AUTH_KEY, MainClassData, SubClassData, MainClassBase, SubClassBase
-from ws_base import ServerBase, Status, Rsp
+from ws_base import Status, Rsp
+from ws_base.server import ServerBase
+# from ws_base.gevent_server import ServerBase
 
 log = logger.get_logger(__name__)
 
@@ -42,39 +44,39 @@ class Server(ServerBase):
 
     def callbacks(self) -> None:
         @self.handle_request()
-        def get_value(_1, _2, _3) -> Rsp:
+        async def get_value(_1, _2, _3) -> Rsp:
             return Rsp(status=Status.SUCCESS, data=self._get_value())
 
         @self.handle_request()
-        def set_value(_1, _2, data) -> Rsp:
+        async def set_value(_1, _2, data) -> Rsp:
             self.value = data
             return Rsp(status=Status.SUCCESS, data=self._get_value())
 
         @self.handle_request()
-        def method(_1, _2, data) -> Rsp:
+        async def method(_1, _2, data) -> Rsp:
             self.param = data
             return Rsp(status=Status.SUCCESS, data=self.result)
 
         @self.handle_request()
-        def get_dataclass(_1, _2, _3) -> Rsp:
+        async def get_dataclass(_1, _2, _3) -> Rsp:
             return Rsp(status=Status.SUCCESS, data=self.dataclass)
 
         @self.handle_request()
-        def set_dataclass(_1, _2, data) -> Rsp:
+        async def set_dataclass(_1, _2, data) -> Rsp:
             self.dataclass = MainClassData.from_json(data)
             return Rsp(status=Status.SUCCESS, data=self.dataclass)
 
         @self.handle_request()
-        def get_basemodel(_1, _2, _3) -> Rsp:
+        async def get_basemodel(_1, _2, _3) -> Rsp:
             return Rsp(status=Status.SUCCESS, data=self.basemodel)
 
         @self.handle_request()
-        def set_basemodel(_1, _2, data) -> Rsp:
+        async def set_basemodel(_1, _2, data) -> Rsp:
             self.basemodel = MainClassBase.from_json(data)
             return Rsp(status=Status.SUCCESS, data=self.basemodel)
 
         @self.handle_request()
-        def increment(_1, _2, data) -> Rsp:
+        async def increment(_1, _2, data) -> Rsp:
             return Rsp(status=Status.SUCCESS, data=data + 1)
 
     def _get_value(self) -> int:

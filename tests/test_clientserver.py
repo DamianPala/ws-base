@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import time
 import logger
 import pytest
 import threading
 from contextlib import contextmanager
 from typing import Tuple
+from pyinstrument import Profiler
 
 from tests.clientserver import Client, Server, MyError, MainClassData, MainClassBase
 from ws_base import ResponseError
@@ -186,7 +188,54 @@ class TestHandleErrors:
         log.info(str(exc_info.value.event))
 
 
+def test_performance():
+    num_clients = 10
+    message_interval = 0.001
+    test_duration = 3
+    req_cnt = 0
+    profiler = Profiler()
 
+    def client_worker():
+        nonlocal req_cnt
+        client = Client(is_autoconnect=True)
+        wait_event = threading.Event()
+        cnt = 0
+        while not stop_event.is_set():
+            cnt = client.increment(cnt)
+            # log.info(cnt)
+            req_cnt += 1
+            wait_event.wait(timeout=message_interval)
+        client.disconnect()
+
+    stop_event = threading.Event()
+    server = Server()
+    server.start()
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    # profiler.start()
+    # with ThreadPoolExecutor(max_workers=num_clients) as executor:
+    #     executor.submit(client_worker)
+    #     time.sleep(3)
+    #     stop_event.set()
+
+    threads = [threading.Thread(target=client_worker) for _ in range(num_clients)]
+
+    profiler.start()
+    for t in threads:
+        t.start()
+
+    time.sleep(test_duration)
+    stop_event.set()
+
+    for t in threads:
+        t.join()
+    profile_session = profiler.stop()
+    cpu_usage = profile_session.cpu_time / profile_session.duration * 100
+
+    server.close()
+    server.join()
+    log.info(f'CPU usage: {cpu_usage:.1f}, throughput: {req_cnt / test_duration:.0f} req/s')
 
 
 def test_dummy():

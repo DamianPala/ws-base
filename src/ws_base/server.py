@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+import ssl
+import asyncio
 import logger
 import functools
 import threading
 import traceback
+import aiohttp.web
+import socketio
+from socketio.exceptions import SocketIOError
 from abc import ABC, abstractmethod
 from typing import Optional, Callable
 from pathlib import Path
 from urllib.parse import urlparse
-
-import socketio
-from socketio.exceptions import SocketIOError
-from gevent import pywsgi
-from geventwebsocket.handler import WebSocketHandler
 
 from .ws_base import (Rsp, Req, Status, SerializableException, get_rsp_event, generate_new_cert,
                       get_dns_names_from_cert, get_external_ip_address)
@@ -20,7 +20,7 @@ from .ws_base import (Rsp, Req, Status, SerializableException, get_rsp_event, ge
 log = logger.get_logger(__name__)
 
 
-class ServerBase(ABC):
+class ServerBase(ABC, threading.Thread):
     def __init__(self,
                  hostname: Optional[str] = None,
                  port: Optional[int] = None,
@@ -28,7 +28,11 @@ class ServerBase(ABC):
                  certfile_path: Optional[Path] = None,
                  keyfile_path: Optional[Path] = None,
                  generate_cert: bool = True,
-                 auth_key: Optional[str] = None) -> None:
+                 auth_key: Optional[str] = None,
+                 ping_interval: int = 25,
+                 ping_timeout: int = 5) -> None:
+        super().__init__()
+
         if url:
             if hostname or port:
                 raise ValueError('You cannot specify both URL and hostname or port')
@@ -47,6 +51,8 @@ class ServerBase(ABC):
         self.certfile_path = certfile_path
         self.keyfile_path = keyfile_path
         self.auth_key = auth_key
+        self.ping_interval = ping_interval
+        self.ping_timeout = ping_timeout
 
         if generate_cert:
             if not self.certfile_path.exists() or not self.keyfile_path.exists():
@@ -59,8 +65,14 @@ class ServerBase(ABC):
                     generate_new_cert(self.certfile_path, self.keyfile_path, self.hostname)
 
         self.sio: Optional[socketio.Server] = None
-        self.app: Optional[socketio.WSGIApp] = None
-        self.server: Optional[pywsgi.WSGIServer] = None
+        self.app: Optional[aiohttp.web.Application] = None
+        self.loop: Optional[asyncio.AbstractEventLoop] = None
+        self.init_ready = threading.Event()
+        self._exit_event = asyncio.Event()
+        self._runner = None
+
+        super().start()
+        self.init_ready.wait()
 
     @property
     def url(self) -> str:
@@ -69,78 +81,94 @@ class ServerBase(ABC):
 
     @property
     def started(self) -> bool:
-        return self.server is not None and self.server.started
+        return hasattr(self, '_runner') and self._runner is not None
+
+    async def _start(self) -> None:
+        ssl_context = None
+        if self.certfile_path and self.keyfile_path:
+            ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+            ssl_context.load_cert_chain(certfile=self.certfile_path, keyfile=self.keyfile_path)
+
+        runner = aiohttp.web.AppRunner(self.app, shutdown_timeout=1)
+        await runner.setup()
+        site = aiohttp.web.TCPSite(runner, self.hostname, self.port, ssl_context=ssl_context)
+        await site.start()
+
+        self._runner = runner
 
     def start(self) -> None:
-        exc = None
-
-        def start_server():
-            try:
-                cors_allowed_origins = [
-                    f'http://{self.hostname}:{self.port}',
-                    f'https://{self.hostname}:{self.port}'
-                ]
-                external_ip_address = get_external_ip_address()
-                if external_ip_address != self.hostname:
-                    cors_allowed_origins += [
-                        f'http://{external_ip_address}:{self.port}',
-                        f'https://{external_ip_address}:{self.port}'
-                    ]
-                self.sio = socketio.Server(async_mode='gevent',
-                                           ping_interval=25,
-                                           ping_timeout=5,
-                                           cors_allowed_origins=cors_allowed_origins)
-                self.app = socketio.WSGIApp(self.sio)
-                self.connection_callbacks()
-                self.callbacks()
-
-                self.server = pywsgi.WSGIServer((self.hostname, self.port),
-                                                self.app,
-                                                handler_class=WebSocketHandler,
-                                                **(dict(certfile=self.certfile_path,
-                                                        keyfile=self.keyfile_path) if self.certfile_path else {}))
-                self.server.serve_forever()
-                log.info('Server thread closed')
-            except Exception as e:
-                nonlocal exc
-                exc = e
-
-        threading.Thread(target=start_server, daemon=True).start()
-
+        asyncio.run_coroutine_threadsafe(self._start(), self.loop).result()
         wait_event = threading.Event()
         while not self.started:
-            if exc:
-                raise exc
-            wait_event.wait(timeout=0.1)
-
-    def join(self) -> None:
-        wait_event = threading.Event()
-        while self.server and self.server.started:
             wait_event.wait(timeout=0.1)
 
     def close(self) -> None:
-        self.server.close()
+        self._exit_event.set()
         self.join()
-        self.server = None
+
+    def run(self) -> None:
+        try:
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+            self.loop.run_until_complete(self.main())
+        except Exception as e:
+            log.exception(e)
+        finally:
+            self.loop.close()
+            log.info('Server thread closed')
+
+    async def main(self):
+        cors_allowed_origins = [
+            f'http://{self.hostname}:{self.port}',
+            f'https://{self.hostname}:{self.port}'
+        ]
+        external_ip_address = get_external_ip_address()
+        if external_ip_address != self.hostname:
+            cors_allowed_origins += [
+                f'http://{external_ip_address}:{self.port}',
+                f'https://{external_ip_address}:{self.port}'
+            ]
+        self.sio = socketio.AsyncServer(async_mode='aiohttp',
+                                        ping_interval=self.ping_interval,
+                                        ping_timeout=self.ping_timeout,
+                                        cors_allowed_origins=cors_allowed_origins)
+        self.app = aiohttp.web.Application()
+        self.sio.attach(self.app)
+        self.connection_callbacks()
+        self.callbacks()
+        self.init_ready.set()
+
+        # Here sleep is used instead of wait on event due to some lags with event state change.
+        while not self._exit_event.is_set():
+            await asyncio.sleep(0.1)
+
+        if self._runner:
+            await self._runner.cleanup()
+            self._runner = None
+
+        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     def handle_request(self) -> Callable:
         def decorator(func: Callable):
             event_name = func.__name__ + '_req'
 
             @functools.wraps(func)
-            def wrapper(sid, data):
+            async def wrapper(sid, data):
                 req = Req.from_dict(data)
                 try:
-                    rsp = func(sid, req.event, req.data)
+                    rsp = await func(sid, req.event, req.data)
                 except Exception as e:
                     rsp = Rsp(status=Status.ERROR, data=SerializableException(name=e.__class__.__name__,
                                                                               message=str(e),
                                                                               tb=traceback.format_exc()).to_dict())
                 rsp.event = get_rsp_event(req.event)
                 rsp.id = req.id
-                self.sio.emit(rsp.event, data=rsp.to_dict(), to=sid)
+                await self.sio.emit(rsp.event, data=rsp.to_dict(), to=sid)
 
-            self.sio.on(event_name)(wrapper)
+            self.sio.on(event_name, wrapper)
             return wrapper
 
         return decorator
