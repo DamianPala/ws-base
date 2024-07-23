@@ -128,7 +128,7 @@ def handle_socketio_error(func) -> Callable:
     return wrapper
 
 
-async def get_external_ip_address() -> str:
+async def get_public_ip_address() -> str:
     async with aiohttp.request('GET', 'http://ifconfig.me/ip') as response:
         return (await response.text()).strip()
 

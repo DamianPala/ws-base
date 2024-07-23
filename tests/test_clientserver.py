@@ -9,14 +9,14 @@ from typing import Tuple
 from decimal import Decimal
 from pyinstrument import Profiler
 
-from tests.clientserver import Client, Server, MyError, MainClassData, MainClassBase
 from ws_base import ResponseError
+from tests.clientserver import Client, Server, MyError, MainClassData, MainClassBase
 
 log = logger.get_logger(__name__)
 
 
 class ClientServer:
-    def __init__(self, start_server: bool = True):
+    def __init__(self, start_server: bool = True) -> None:
         self.server = Server()
         self.client = Client(is_autoconnect=False)
         self.start_server = start_server
@@ -24,7 +24,7 @@ class ClientServer:
     def __enter__(self) -> Tuple[Client, Server]:
         return self.start()
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         return self.close()
 
     def start(self) -> Tuple[Client, Server]:
@@ -33,7 +33,7 @@ class ClientServer:
             self.client.connect()
         return self.client, self.server
 
-    def close(self):
+    def close(self) -> None:
         self.client.disconnect()
         self.server.close()
         self.server.join()
@@ -49,7 +49,7 @@ def client_server_context():
 
 
 @pytest.fixture
-def clientserver():
+def clientserver() -> Tuple[Client, Server]:
     with client_server_context() as (client, server):
         yield client, server
 
@@ -239,6 +239,18 @@ class TestConnHandling:
 
             server_process.terminate()
 
+    def test_dummy(self):
+        server = Server()
+        server.start()
+        client = Client(is_autoconnect=True)
+
+        client.get_value()
+
+        server.close()
+
+        with pytest.raises(ConnectionError):
+            client.get_value()
+
     def test_multithreading(self, clientserver):
         client, server = clientserver
 
@@ -283,8 +295,8 @@ class TestHandleErrors:
         mocker.patch.object(server, '_get_value', side_effect=MyError(exc_msg))
         with pytest.raises(MyError, match=exc_msg) as exc_info:
             client.get_value()
-        log.info(str(exc_info.value.tb))
-        log.info(str(exc_info.value.event))
+        log.info(str(exc_info.value.tb))  # noqa
+        log.info(str(exc_info.value.event))  # noqa
 
 
 def test_performance():
@@ -292,6 +304,7 @@ def test_performance():
     message_interval = 0.001
     test_duration = 3
     req_cnt = 0
+    start_event = threading.Event()
     profiler = Profiler()
 
     def client_worker():
@@ -299,9 +312,9 @@ def test_performance():
         client = Client(is_autoconnect=True)
         wait_event = threading.Event()
         cnt = 0
+        start_event.wait()
         while not stop_event.is_set():
             cnt = client.increment(cnt)
-            # log.info(cnt)
             req_cnt += 1
             wait_event.wait(timeout=message_interval)
         client.disconnect()
@@ -310,22 +323,15 @@ def test_performance():
     server = Server()
     server.start()
 
-    from concurrent.futures import ThreadPoolExecutor
-
-    # profiler.start()
-    # with ThreadPoolExecutor(max_workers=num_clients) as executor:
-    #     executor.submit(client_worker)
-    #     time.sleep(3)
-    #     stop_event.set()
-
     threads = [threading.Thread(target=client_worker) for _ in range(num_clients)]
 
-    profiler.start()
     for t in threads:
         t.start()
+    time.sleep(1)
 
+    profiler.start()
+    start_event.set()
     time.sleep(test_duration)
-    log.error(server.connections)
     stop_event.set()
 
     for t in threads:
@@ -336,11 +342,3 @@ def test_performance():
     server.close()
     server.join()
     log.info(f'CPU usage: {cpu_usage:.1f}, throughput: {req_cnt / test_duration:.0f} req/s')
-
-
-def test_dummy():
-    ...
-    # client, server = clientserver
-
-
-

@@ -15,7 +15,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from .common import (Rsp, Req, Status, SerializableException, get_rsp_event, generate_new_cert,
-                     get_dns_names_from_cert, get_external_ip_address)
+                     get_dns_names_from_cert, get_public_ip_address)
 
 log = logger.get_logger(__name__)
 
@@ -67,12 +67,9 @@ class BaseServer(ABC, threading.Thread):
         self.sio: Optional[socketio.Server] = None
         self.app: Optional[aiohttp.web.Application] = None
         self.loop: Optional[asyncio.AbstractEventLoop] = None
-        self.init_ready = threading.Event()
+        self.loop_ready = threading.Event()
         self._exit_event = asyncio.Event()
         self._runner: Optional[aiohttp.web.AppRunner] = None
-
-        super().start()
-        self.init_ready.wait()
 
     @property
     def url(self) -> str:
@@ -87,16 +84,40 @@ class BaseServer(ABC, threading.Thread):
     def connections(self) -> List[str]:
         try:
             return list(filter(lambda x: x is not None, self.sio.manager.rooms['/']))
-        except KeyError:
+        except (KeyError, AttributeError):
             return []
 
     def start(self) -> None:
+        if self.started:
+            raise RuntimeError('Server already started')
+
+        super().start()
+        self.loop_ready.wait()
         asyncio.run_coroutine_threadsafe(self._start(), self.loop).result()
         wait_event = threading.Event()
         while not self.started:
             wait_event.wait(timeout=0.1)
 
     async def _start(self) -> None:
+        cors_allowed_origins = [
+            f'http://{self.hostname}:{self.port}',
+            f'https://{self.hostname}:{self.port}'
+        ]
+        external_ip_address = await get_public_ip_address()
+        if external_ip_address != self.hostname:
+            cors_allowed_origins += [
+                f'http://{external_ip_address}:{self.port}',
+                f'https://{external_ip_address}:{self.port}'
+            ]
+        self.sio = socketio.AsyncServer(async_mode='aiohttp',
+                                        ping_interval=self.ping_interval,
+                                        ping_timeout=self.ping_timeout,
+                                        cors_allowed_origins=cors_allowed_origins)
+        self.app = aiohttp.web.Application()
+        self.sio.attach(self.app)
+        self.connection_callbacks()
+        self.callbacks()
+
         ssl_context = None
         if self.certfile_path and self.keyfile_path:
             ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
@@ -125,25 +146,7 @@ class BaseServer(ABC, threading.Thread):
             log.info('Server thread closed')
 
     async def _main(self) -> None:
-        cors_allowed_origins = [
-            f'http://{self.hostname}:{self.port}',
-            f'https://{self.hostname}:{self.port}'
-        ]
-        external_ip_address = await get_external_ip_address()
-        if external_ip_address != self.hostname:
-            cors_allowed_origins += [
-                f'http://{external_ip_address}:{self.port}',
-                f'https://{external_ip_address}:{self.port}'
-            ]
-        self.sio = socketio.AsyncServer(async_mode='aiohttp',
-                                        ping_interval=self.ping_interval,
-                                        ping_timeout=self.ping_timeout,
-                                        cors_allowed_origins=cors_allowed_origins)
-        self.app = aiohttp.web.Application()
-        self.sio.attach(self.app)
-        self.connection_callbacks()
-        self.callbacks()
-        self.init_ready.set()
+        self.loop_ready.set()
 
         # Here sleep is used instead of wait on event due to some lags with event state change.
         while not self._exit_event.is_set():

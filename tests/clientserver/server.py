@@ -2,11 +2,9 @@
 # -*- coding: utf-8 -*-
 import logger
 from decimal import Decimal
+from ws_base import Status, Rsp, BaseServer
 
 from .common import PACKAGE_PATH, SERVER_DEFAULT_URL, AUTH_KEY, MainClassData, SubClassData, MainClassBase, SubClassBase
-from ws_base import Status, Rsp
-from ws_base.server import BaseServer
-# from ws_base.gevent_server import ServerBase
 
 log = logger.get_logger(__name__)
 
@@ -35,7 +33,7 @@ class Server(BaseServer):
     def start(self) -> None:
         log.info(f'Starting {SERVER_NAME}.')
         super().start()
-        log.info(f'{SERVER_NAME} started at url: {self.url}')
+        log.info(f'{SERVER_NAME} started at URL: {self.url}')
 
     def close(self) -> None:
         log.info(f'Closing {SERVER_NAME}.')

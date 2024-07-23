@@ -6,7 +6,6 @@ from dataclasses import dataclass
 from enum import StrEnum, auto
 from typing import List
 from decimal import Decimal
-
 import ws_base as wsbase  # TODO: rename
 
 
