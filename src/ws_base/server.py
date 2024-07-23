@@ -10,17 +10,17 @@ import aiohttp.web
 import socketio
 from socketio.exceptions import SocketIOError
 from abc import ABC, abstractmethod
-from typing import Optional, Callable
+from typing import Optional, Union, Callable, List, Dict
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .ws_base import (Rsp, Req, Status, SerializableException, get_rsp_event, generate_new_cert,
-                      get_dns_names_from_cert, get_external_ip_address)
+from .common import (Rsp, Req, Status, SerializableException, get_rsp_event, generate_new_cert,
+                     get_dns_names_from_cert, get_external_ip_address)
 
 log = logger.get_logger(__name__)
 
 
-class ServerBase(ABC, threading.Thread):
+class BaseServer(ABC, threading.Thread):
     def __init__(self,
                  hostname: Optional[str] = None,
                  port: Optional[int] = None,
@@ -28,7 +28,7 @@ class ServerBase(ABC, threading.Thread):
                  certfile_path: Optional[Path] = None,
                  keyfile_path: Optional[Path] = None,
                  generate_cert: bool = True,
-                 auth_key: Optional[str] = None,
+                 auth_data: Optional[Union[str, Dict]] = None,
                  ping_interval: int = 25,
                  ping_timeout: int = 5) -> None:
         super().__init__()
@@ -50,7 +50,7 @@ class ServerBase(ABC, threading.Thread):
 
         self.certfile_path = certfile_path
         self.keyfile_path = keyfile_path
-        self.auth_key = auth_key
+        self.auth_data = auth_data
         self.ping_interval = ping_interval
         self.ping_timeout = ping_timeout
 
@@ -69,7 +69,7 @@ class ServerBase(ABC, threading.Thread):
         self.loop: Optional[asyncio.AbstractEventLoop] = None
         self.init_ready = threading.Event()
         self._exit_event = asyncio.Event()
-        self._runner = None
+        self._runner: Optional[aiohttp.web.AppRunner] = None
 
         super().start()
         self.init_ready.wait()
@@ -81,7 +81,20 @@ class ServerBase(ABC, threading.Thread):
 
     @property
     def started(self) -> bool:
-        return hasattr(self, '_runner') and self._runner is not None
+        return self._runner is not None
+
+    @property
+    def connections(self) -> List[str]:
+        try:
+            return list(filter(lambda x: x is not None, self.sio.manager.rooms['/']))
+        except KeyError:
+            return []
+
+    def start(self) -> None:
+        asyncio.run_coroutine_threadsafe(self._start(), self.loop).result()
+        wait_event = threading.Event()
+        while not self.started:
+            wait_event.wait(timeout=0.1)
 
     async def _start(self) -> None:
         ssl_context = None
@@ -96,12 +109,6 @@ class ServerBase(ABC, threading.Thread):
 
         self._runner = runner
 
-    def start(self) -> None:
-        asyncio.run_coroutine_threadsafe(self._start(), self.loop).result()
-        wait_event = threading.Event()
-        while not self.started:
-            wait_event.wait(timeout=0.1)
-
     def close(self) -> None:
         self._exit_event.set()
         self.join()
@@ -110,19 +117,19 @@ class ServerBase(ABC, threading.Thread):
         try:
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
-            self.loop.run_until_complete(self.main())
+            self.loop.run_until_complete(self._main())
         except Exception as e:
             log.exception(e)
         finally:
             self.loop.close()
             log.info('Server thread closed')
 
-    async def main(self):
+    async def _main(self) -> None:
         cors_allowed_origins = [
             f'http://{self.hostname}:{self.port}',
             f'https://{self.hostname}:{self.port}'
         ]
-        external_ip_address = get_external_ip_address()
+        external_ip_address = await get_external_ip_address()
         if external_ip_address != self.hostname:
             cors_allowed_origins += [
                 f'http://{external_ip_address}:{self.port}',
@@ -177,7 +184,7 @@ class ServerBase(ABC, threading.Thread):
         @self.sio.event
         def connect(sid, _, auth) -> None:  # noqa
             log.info(f'Connect client: {sid}')
-            if auth != self.auth_key:
+            if auth != self.auth_data:
                 raise socketio.exceptions.ConnectionRefusedError('Authentication failed')
 
         @self.sio.event

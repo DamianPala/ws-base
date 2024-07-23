@@ -5,12 +5,12 @@ from typing import Any
 
 from . import common
 from .common import (SERVER_DEFAULT_URL, AUTH_KEY, Event, MainClassData, MainClassBase)
-from ws_base import ClientBase, Req, connect, build_exception_map
+from ws_base import BaseClient, Req, connect, build_exception_map
 
 log = logger.get_logger(__name__)
 
 
-class Client(ClientBase):
+class Client(BaseClient):
     def __init__(self, server_url: str = SERVER_DEFAULT_URL, is_autoconnect: bool = False):
         super().__init__(server_url,
                          build_exception_map(common),
@@ -68,33 +68,33 @@ class Client(ClientBase):
 
     def callbacks(self) -> None:
         @self.handle_response()
-        def get_value() -> None:
-            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+        def get_value(_) -> None:
+            pass
 
         @self.handle_response()
-        def set_value() -> None:
-            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+        def set_value(_) -> None:
+            pass
 
         @self.handle_response()
-        def method() -> None:
-            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+        def method(rsp) -> None:
+            log.info(f'Method called with rsp: {rsp}')
 
         @self.handle_response()
-        def get_dataclass() -> None:
-            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+        def get_dataclass(_) -> None:
+            pass
 
         @self.handle_response()
-        def set_dataclass() -> None:
-            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+        def set_dataclass(_) -> None:
+            pass
 
         @self.handle_response()
-        def get_basemodel() -> None:
-            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+        def get_basemodel(_) -> None:
+            pass
 
         @self.handle_response()
-        def set_basemodel() -> None:
-            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+        def set_basemodel(_) -> None:
+            pass
 
         @self.handle_response()
-        def increment() -> None:
-            log.debug(f'Received {self.rsp.event} from {self.server_url}')
+        def increment(_) -> None:
+            pass

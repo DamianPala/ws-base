@@ -23,15 +23,13 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-    "requests==2.31.0",
-    "python-socketio==5.9.0",
-    "gevent==23.9.1",
-    "gevent-websocket==0.10.1",
-    "websocket-client==1.7.0",
+    "aiohttp==3.9.5",
     "cryptography==41.0.4",
-    "pydantic",
     "logger @ git+https://github.com/DamianPala/logger.git@main",
-    "aiohttp==3.9.5"
+    "python-socketio==5.11.3",
+    "pydantic==2.8.2",
+    "requests==2.32.3",
+    "websocket-client==1.8.0"
 ]
 
 [project.urls]

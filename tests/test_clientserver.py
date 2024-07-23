@@ -6,6 +6,7 @@ import pytest
 import threading
 from contextlib import contextmanager
 from typing import Tuple
+from decimal import Decimal
 from pyinstrument import Profiler
 
 from tests.clientserver import Client, Server, MyError, MainClassData, MainClassBase
@@ -75,8 +76,53 @@ class TestComm:
         assert server.param == new_param
         assert result == server.result
 
-    def test_data_types(self):
-        ...
+    def test_data_types(self, clientserver):
+        client, server = clientserver
+
+        new_value = None
+        value = client.set_value(new_value)
+        log.info(f'Type: {type(value)}, value: {value}')
+        assert value == server.value == new_value
+
+        new_value = True
+        value = client.set_value(new_value)
+        log.info(f'Type: {type(value)}, value: {value}')
+        assert value == server.value == new_value
+
+        new_value = 123
+        value = client.set_value(new_value)
+        log.info(f'Type: {type(value)}, value: {value}')
+        assert value == server.value == new_value
+
+        new_value = 123.456
+        value = client.set_value(new_value)
+        log.info(f'Type: {type(value)}, value: {value}')
+        assert value == server.value == new_value
+
+        new_value = Decimal(123)
+        value = client.set_value(str(new_value))
+        log.info(f'Type: {type(value)}, value: {value}')
+        assert Decimal(value) == Decimal(server.value) == new_value
+
+        new_value = 'test'
+        value = client.set_value(new_value)
+        log.info(f'Type: {type(value)}, value: {value}')
+        assert value == server.value == new_value
+
+        new_value = b'bytes test'
+        value = client.set_value(new_value)
+        log.info(f'Type: {type(value)}, value: {value}')
+        assert value == server.value == new_value
+
+        new_value = [1, 2, 3]
+        value = client.set_value(new_value)
+        log.info(f'Type: {type(value)}, value: {value}')
+        assert value == server.value == new_value
+
+        new_value = {'key': 123}
+        value = client.set_value(new_value)
+        log.info(f'Type: {type(value)}, value: {value}')
+        assert value == server.value == new_value
 
     def test_get_dataclass(self, clientserver):
         client, server = clientserver
@@ -139,6 +185,59 @@ class TestConnHandling:
         mocker.patch.object(client.sio, 'emit', new=emit)
         with pytest.raises(type(sim_exc), match=str(sim_exc)):
             client.get_value()
+
+    def test_client_reconnects_when_server_restarted(self):
+        import multiprocessing
+        num_clients = 10
+        server_started = multiprocessing.Event()
+        manager = multiprocessing.Manager()
+        shared_state = manager.dict()
+
+        def start_server():
+            server = Server()
+            server.start()
+            server_started.set()
+            while True:
+                shared_state['connections'] = server.connections
+                time.sleep(0.1)
+
+        def get_server_connections():
+            time.sleep(0.11)
+            return shared_state['connections']
+
+        def client_test(client):  # noqa
+            cnt = 0
+            for _ in range(10):
+                cnt = client.increment(cnt)
+            assert cnt == 10
+
+        server_process = multiprocessing.Process(target=start_server)
+        server_started.clear()
+        server_process.start()
+        server_started.wait()
+
+        clients = [Client(is_autoconnect=True) for _ in range(num_clients)]
+        for client in clients:
+            client_test(client)
+
+        assert len(get_server_connections()) == num_clients
+
+        server_process.terminate()
+
+        for x in range(3):
+            time.sleep(10)
+
+            server_process = multiprocessing.Process(target=start_server)
+            server_started.clear()
+            server_process.start()
+            server_started.wait()
+
+            for client in clients:
+                client_test(client)
+
+            assert len(get_server_connections()) == num_clients
+
+            server_process.terminate()
 
     def test_multithreading(self, clientserver):
         client, server = clientserver
@@ -226,6 +325,7 @@ def test_performance():
         t.start()
 
     time.sleep(test_duration)
+    log.error(server.connections)
     stop_event.set()
 
     for t in threads:

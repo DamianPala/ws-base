@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from .common import PACKAGE_PATH, SERVER_DEFAULT_URL, AUTH_KEY, MainClassData, SubClassData, MainClassBase, SubClassBase
 from ws_base import Status, Rsp
-from ws_base.server import ServerBase
+from ws_base.server import BaseServer
 # from ws_base.gevent_server import ServerBase
 
 log = logger.get_logger(__name__)
@@ -15,13 +15,13 @@ CERTFILE_PATH = PACKAGE_PATH / 'server_cert.pem'
 KEYFILE_PATH = PACKAGE_PATH / 'server_key.pem'
 
 
-class Server(ServerBase):
+class Server(BaseServer):
     def __init__(self, url: str = SERVER_DEFAULT_URL) -> None:
         super().__init__(url=url,
                          certfile_path=CERTFILE_PATH,
                          keyfile_path=KEYFILE_PATH,
                          generate_cert=True,
-                         auth_key=AUTH_KEY)
+                         auth_data=AUTH_KEY)
         self.value = 1
         self.param = 10
         self.result = self.param * 2

@@ -5,38 +5,42 @@ import functools
 import inspect
 import threading
 from abc import ABC, abstractmethod
-from typing import Optional, Dict, Callable, Any
+from typing import Optional, Union, Dict, Callable, Any
 
 import socketio
 from socketio.exceptions import SocketIOError
 
-from .ws_base import (Rsp, Req, Status, SerializableException, ResponseError, ResponseTimeoutError,
-                      get_req_event, handle_socketio_error)
+from .common import (Rsp, Req, Status, SerializableException, ResponseError, ResponseTimeoutError,
+                     get_req_event, handle_socketio_error)
 
 log = logger.get_logger(__name__)
 
 
-class ClientBase(ABC):
+class BaseClient(ABC):
     def __init__(self,
                  server_url: str,
                  exception_map: Dict,
-                 auth_data: Any = None,
+                 auth_data: Optional[Union[str, Dict]] = None,
                  ssl_verify: bool = True,
                  is_autoconnect: bool = False,
+                 reconnection: bool = True,
                  timeout: float = 3.0,
-                 retries: int = 3) -> None:
+                 retries: int = 3,
+                 **sio_kwargs) -> None:
         self._server_url = server_url
         self._exception_map = exception_map
         self.auth_data = auth_data
         self.ssl_verify = ssl_verify
+        self.reconnection = reconnection
         self.timeout = timeout
         self.retries = retries
+        self._sio_kwargs = sio_kwargs
 
         self.rsp = None
         self.sio: Optional[socketio.Client] = None
-        self.lock = threading.Lock()
-        self.req_seq = 0
-        self.pending_responses = {}
+        self._lock = threading.Lock()
+        self._req_seq = 0
+        self._pending_responses = {}
         if is_autoconnect:
             handle_socketio_error(self.connect)()
 
@@ -56,7 +60,7 @@ class ClientBase(ABC):
         connect(self, url=url)
 
     def disconnect(self) -> None:
-        with self.lock:
+        with self._lock:
             if self.connected:
                 self.sio.disconnect()
                 self.sio = None
@@ -99,19 +103,19 @@ class ClientBase(ABC):
                     raise
 
     def _make_request(self, req: Req, timeout: float) -> Rsp:
-        with self.lock:
-            req.id = self.req_seq
-            self.req_seq += 1
+        with self._lock:
+            req.id = self._req_seq
+            self._req_seq += 1
             event = threading.Event()
-            self.pending_responses[req.id] = (event, None)
+            self._pending_responses[req.id] = (event, None)
             log.debug(f'Make request: {req}')
             self.sio.emit(get_req_event(req.event), req.to_dict())
 
         if not event.wait(timeout):
             raise ResponseTimeoutError('Response timeout')
 
-        with self.lock:
-            rsp = self.pending_responses.pop(req.id)[1]
+        with self._lock:
+            rsp = self._pending_responses.pop(req.id)[1]
         if rsp is None:
             raise ResponseTimeoutError('Response received but was None')
 
@@ -125,13 +129,15 @@ class ClientBase(ABC):
             def wrapper(data: Dict):
                 rsp_data = {key: (value[:-4] if key == 'event' else value) for key, value in data.items()}
                 rsp = Rsp.from_dict(rsp_data)
-                with self.lock:
-                    if rsp.id in self.pending_responses:
-                        event, _ = self.pending_responses[rsp.id]
-                        self.pending_responses[rsp.id] = (event, rsp)
+                log.debug(f'Received response {rsp} from {self.server_url}')
+                with self._lock:
+                    if rsp.id in self._pending_responses:
+                        event, _ = self._pending_responses[rsp.id]
+                        self._pending_responses[rsp.id] = (event, rsp)
                         event.set()
+                return func(rsp)
 
-            self.sio.on(event_name)(wrapper)
+            self.sio.on(event_name, wrapper)
             return wrapper
 
         return decorator
@@ -151,11 +157,14 @@ class ClientBase(ABC):
 
 
 def connect(*args, **kwargs):
-    def _connect(self, url: str = None) -> None:
-        with self.lock:
+    def _connect(self, url: Optional[str] = None) -> None:
+        with self._lock:
             if not self.connected:
                 if self.sio is None:
-                    self.sio = socketio.Client(reconnection=True, request_timeout=1, ssl_verify=self.ssl_verify)
+                    self.sio = socketio.Client(reconnection=self.reconnection,
+                                               request_timeout=self.timeout,
+                                               ssl_verify=self.ssl_verify,
+                                               **self._sio_kwargs)
                     self.connection_callbacks()
                     self.callbacks()
                 if url is not None:

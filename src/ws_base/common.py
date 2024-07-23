@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import logger
-import requests
 import functools
 import inspect
+import aiohttp
 from abc import ABC
 from dataclasses import dataclass, asdict
 from typing import Optional, Union, Tuple, List, Dict, Callable, Any
@@ -128,8 +128,9 @@ def handle_socketio_error(func) -> Callable:
     return wrapper
 
 
-def get_external_ip_address() -> str:
-    return requests.get('http://ifconfig.me').text.strip()
+async def get_external_ip_address() -> str:
+    async with aiohttp.request('GET', 'http://ifconfig.me/ip') as response:
+        return (await response.text()).strip()
 
 
 def build_exception_map(module) -> Dict:
