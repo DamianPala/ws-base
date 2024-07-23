@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import logger
 from typing import Any
-from ws_base import Req, BaseClient, connect, build_exception_map
+from wsbase import Req, BaseClient, connect, build_exception_map
 
 from . import common
 from .common import (SERVER_DEFAULT_URL, AUTH_KEY, Event, MainClassData, MainClassBase)

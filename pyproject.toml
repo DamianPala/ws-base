@@ -29,19 +29,19 @@ dependencies = [
     "python-socketio>=5.0.0,<6.0.0",
     "pydantic>=2.0.0,<3.0.0",
     "requests>=2.0.0,<3.0.0",
-    "websocket-client>=1.0.0,<2.0.0",
+    "websocket-client>=1.0.0,<2.0.0"
 ]
 
 [project.urls]
-Documentation = "https://github.com/DamianPala/ws-base#readme"
-Issues = "https://github.com/DamianPala/ws-base/issues"
-Source = "https://github.com/DamianPala/ws-base"
+Documentation = "https://github.com/DamianPala/wsbase#readme"
+Issues = "https://github.com/DamianPala/wsbase/issues"
+Source = "https://github.com/DamianPala/wsbase"
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [tool.hatch.version]
-path = "src/ws_base/__about__.py"
+path = "src/wsbase/__about__.py"
 
 [tool.hatch.envs.default]
 dependencies = [
@@ -75,16 +75,16 @@ extra-dependencies = [
 python = ["3.12"]
 
 [tool.coverage.run]
-source_pkgs = ["ws_base", "tests"]
+source_pkgs = ["wsbase", "tests"]
 branch = true
 parallel = true
 omit = [
-    "src/ws_base/__about__.py",
+    "src/wsbase/__about__.py",
 ]
 
 [tool.coverage.paths]
-ws_base = ["src/ws_base", "*/ws-base/src/ws_base"]
-tests = ["tests", "*/ws-base/tests"]
+wsbase = ["src/wsbase", "*/wsbase/src/wsbase"]
+tests = ["tests", "*/wsbase/tests"]
 
 [tool.coverage.report]
 exclude_lines = [

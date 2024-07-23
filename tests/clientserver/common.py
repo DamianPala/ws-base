@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import StrEnum, auto
 from typing import List
 from decimal import Decimal
-import ws_base as wsbase  # TODO: rename
+from wsbase import SerializableDataClass, SerializableBaseModel
 
 
 SERVER_DEFAULT_HOST = 'localhost'
@@ -31,11 +31,11 @@ class Event(StrEnum):
     INCREMENT = auto()
 
 
-class SubClassBase(wsbase.SerializableBaseModel):
+class SubClassBase(SerializableBaseModel):
     value: Decimal
 
 
-class MainClassBase(wsbase.SerializableBaseModel):
+class MainClassBase(SerializableBaseModel):
     id: int
     name: str
     values: List[Decimal]
@@ -43,12 +43,12 @@ class MainClassBase(wsbase.SerializableBaseModel):
 
 
 @dataclass
-class SubClassData(wsbase.SerializableDataClass):
+class SubClassData(SerializableDataClass):
     value: Decimal
 
 
 @dataclass
-class MainClassData(wsbase.SerializableDataClass):
+class MainClassData(SerializableDataClass):
     id: int
     name: str
     values: List[Decimal]

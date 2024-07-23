@@ -9,7 +9,7 @@ from typing import Tuple
 from decimal import Decimal
 from pyinstrument import Profiler
 
-from ws_base import ResponseError
+from wsbase import ResponseError
 from tests.clientserver import Client, Server, MyError, MainClassData, MainClassBase
 
 log = logger.get_logger(__name__)

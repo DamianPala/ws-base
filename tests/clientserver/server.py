@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 import logger
 from decimal import Decimal
-from ws_base import Status, Rsp, BaseServer
+from wsbase import Status, Rsp, BaseServer
 
 from .common import PACKAGE_PATH, SERVER_DEFAULT_URL, AUTH_KEY, MainClassData, SubClassData, MainClassBase, SubClassBase
 
