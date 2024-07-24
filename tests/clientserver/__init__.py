@@ -2,4 +2,4 @@
 # -*- coding: utf-8 -*-
 from .client import Client
 from .server import Server
-from .common import MyError, MainClassData, MainClassBase
+from .common import MyError, MainClassData, SubClassData, MainClassBase, SubClassBase

@@ -6,7 +6,7 @@ import inspect
 import aiohttp
 from abc import ABC
 from dataclasses import dataclass, asdict
-from typing import Optional, Union, Tuple, List, Dict, Callable, Any
+from typing import Optional, Union, Tuple, List, Dict, Callable, Literal, Any
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from pydantic import RootModel, BaseModel
@@ -36,6 +36,13 @@ class ResponseTimeoutError(WsBaseError):
 
 class SerializableBaseModel(BaseModel):
     @classmethod
+    def from_dict(cls, d: Dict) -> 'SerializableBaseModel':
+        return cls.model_validate(d)
+
+    def to_dict(self, mode: Literal['json', 'python'] | str = 'python') -> Dict:
+        return self.model_dump(mode=mode)
+
+    @classmethod
     def from_json(cls, json_str: str) -> 'SerializableBaseModel':
         return cls.model_validate_json(json_str)
 
@@ -44,6 +51,13 @@ class SerializableBaseModel(BaseModel):
 
 
 class SerializableDataClass:
+    @classmethod
+    def from_dict(cls, d: Dict) -> 'SerializableDataClass':
+        return RootModel[cls].model_validate(d).root
+
+    def to_dict(self, mode: Literal['json', 'python'] | str = 'python') -> Dict:
+        return RootModel[self.__class__](self).model_dump(mode=mode)
+
     @classmethod
     def from_json(cls, json_str: str) -> 'SerializableDataClass':
         return RootModel[cls].model_validate_json(json_str).root

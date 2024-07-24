@@ -5,7 +5,7 @@ from typing import Any
 from wsbase import Req, BaseClient, connect, build_exception_map
 
 from . import common
-from .common import (SERVER_DEFAULT_URL, AUTH_KEY, Event, MainClassData, MainClassBase)
+from .common import SERVER_DEFAULT_URL, AUTH_KEY, Event, MainClassData, MainClassBase
 
 log = logger.get_logger(__name__)
 
