@@ -7,7 +7,7 @@ name = "wsbase"
 dynamic = ["version"]
 description = 'Websocket Cliet Server Base'
 readme = "README.md"
-requires-python = ">=3.11.0,<3.14.0"
+requires-python = ">=3.8.0,<3.14.0"
 license = "MIT"
 keywords = []
 authors = [{ name = "Haz", email = "mail@damianpala.com" }]
