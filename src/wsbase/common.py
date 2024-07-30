@@ -7,7 +7,7 @@ import aiohttp
 from abc import ABC
 from dataclasses import dataclass, asdict
 from typing import Optional, Union, Tuple, List, Dict, Callable, Literal, Any
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from pydantic import RootModel, BaseModel
 from cryptography import x509
@@ -39,7 +39,7 @@ class SerializableBaseModel(BaseModel):
     def from_dict(cls, d: Dict) -> 'SerializableBaseModel':
         return cls.model_validate(d)
 
-    def to_dict(self, mode: Literal['json', 'python'] | str = 'python') -> Dict:
+    def to_dict(self, mode: Literal['json', 'python'] = 'python') -> Dict:
         return self.model_dump(mode=mode)
 
     @classmethod
@@ -55,7 +55,7 @@ class SerializableDataClass:
     def from_dict(cls, d: Dict) -> 'SerializableDataClass':
         return RootModel[cls].model_validate(d).root
 
-    def to_dict(self, mode: Literal['json', 'python'] | str = 'python') -> Dict:
+    def to_dict(self, mode: Literal['json', 'python'] = 'python') -> Dict:
         return RootModel[self.__class__](self).model_dump(mode=mode)
 
     @classmethod
@@ -174,7 +174,7 @@ def generate_selfsigned_cert(hostname: str,
         alt_names += [x509.DNSName(ip) for ip in ip_addresses]
     san = x509.SubjectAlternativeName(alt_names)
     basic_constraints = x509.BasicConstraints(ca=True, path_length=0)
-    now = datetime.now(UTC)
+    now = datetime.now(timezone.UTC)
     cert = (x509.CertificateBuilder()
             .subject_name(name)
             .issuer_name(name)

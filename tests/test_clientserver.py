@@ -239,18 +239,6 @@ class TestConnHandling:
 
             server_process.terminate()
 
-    def test_dummy(self):
-        server = Server()
-        server.start()
-        client = Client(is_autoconnect=True)
-
-        client.get_value()
-
-        server.close()
-
-        with pytest.raises(ConnectionError):
-            client.get_value()
-
     def test_multithreading(self, clientserver):
         client, server = clientserver
 

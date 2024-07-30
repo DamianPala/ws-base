@@ -3,7 +3,6 @@
 import hashlib
 from pathlib import Path
 from dataclasses import dataclass
-from enum import StrEnum, auto
 from typing import List
 from decimal import Decimal
 from wsbase import SerializableDataClass, SerializableBaseModel
@@ -20,15 +19,17 @@ class MyError(Exception):
     pass
 
 
-class Event(StrEnum):
-    GET_VALUE = auto()
-    SET_VALUE = auto()
-    METHOD = auto()
-    GET_DATACLASS = auto()
-    SET_DATACLASS = auto()
-    GET_BASEMODEL = auto()
-    SET_BASEMODEL = auto()
-    INCREMENT = auto()
+class Event:
+    """For Python>=3.11 use StrEnum GET_VALUE = auto()"""
+    
+    GET_VALUE = 'get_value'
+    SET_VALUE = 'set_value'
+    METHOD = 'method'
+    GET_DATACLASS = 'get_dataclass'
+    SET_DATACLASS = 'set_dataclass'
+    GET_BASEMODEL = 'get_basemodel'
+    SET_BASEMODEL = 'set_basemodel'
+    INCREMENT = 'increment'
 
 
 class SubClassBase(SerializableBaseModel):
