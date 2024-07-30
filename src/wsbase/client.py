@@ -19,7 +19,7 @@ log = logger.get_logger(__name__)
 class BaseClient(ABC):
     def __init__(self,
                  server_url: str,
-                 exception_map: Dict,
+                 exception_map: Optional[Dict] = None,
                  auth_data: Optional[Union[str, Dict]] = None,
                  ssl_verify: bool = True,
                  is_autoconnect: bool = False,
@@ -145,7 +145,7 @@ class BaseClient(ABC):
     def verify_response(self, rsp: Rsp) -> None:
         if rsp.status != Status.SUCCESS:
             exception = SerializableException.from_dict(rsp.data)
-            exception_class = self._exception_map.get(exception.name)
+            exception_class = self._exception_map.get(exception.name) if self._exception_map else None
             if exception_class:
                 exc = exception_class(exception.message)
                 exc.tb = exception.tb
