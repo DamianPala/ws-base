@@ -123,7 +123,7 @@ class BaseServer(ABC, threading.Thread):
             ssl_context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
             ssl_context.load_cert_chain(certfile=self.certfile_path, keyfile=self.keyfile_path)
 
-        runner = aiohttp.web.AppRunner(self.app, shutdown_timeout=1)
+        runner = aiohttp.web.AppRunner(self.app)
         await runner.setup()
         site = aiohttp.web.TCPSite(runner, self.hostname, self.port, ssl_context=ssl_context)
         await site.start()
